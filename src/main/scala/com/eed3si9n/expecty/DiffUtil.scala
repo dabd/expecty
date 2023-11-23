@@ -24,26 +24,32 @@ object DiffUtil {
 
   val ansiColorToken: Char = '\u001b'
 
-  @tailrec private def splitTokens(str: String, acc: List[String]): List[String] =
-    if (str == "")
+  @tailrec
+  private[expecty] def splitTokens(str: String, acc: List[String]): List[String] = {
+    if (str == "") {
       acc.reverse
-    else {
+    } else {
       val head = str.charAt(0)
-      val (token, rest) =
-        if (head == ansiColorToken) { // ansi color token
-          val splitIndex = str.indexOf('m') + 1
-          (str.substring(0, splitIndex), str.substring(splitIndex))
-        } else if (Character.isAlphabetic(head) || Character.isDigit(head))
-          str.span(c => Character.isAlphabetic(c) || Character.isDigit(c) && c != ansiColorToken)
-        else if (Character.isMirrored(head) || Character.isWhitespace(head))
+      val (token, rest) = head match {
+        case `ansiColorToken` =>
+          val splitIndex = str.indexOf('m')
+          if (splitIndex == -1)
+            // If 'm' is not found, treat the ESC character as a standalone token
+            (str.substring(0, 1), str.substring(1))
+          else (str.substring(0, splitIndex + 1), str.substring(splitIndex + 1))
+        case _ if Character.isAlphabetic(head) || Character.isDigit(head) =>
+          str.span(c => Character.isAlphabetic(c) || Character.isDigit(c))
+        case _ if Character.isMirrored(head) || Character.isWhitespace(head) =>
           str.splitAt(1)
-        else
+        case _ =>
           str.span { c =>
             !Character.isAlphabetic(c) && !Character.isDigit(c) &&
-            !Character.isMirrored(c) && !Character.isWhitespace(c) && c != ansiColorToken
+            !Character.isMirrored(c) && !Character.isWhitespace(c)
           }
+      }
       splitTokens(rest, token :: acc)
     }
+  }
 
   /** @return a tuple of the (found, expected, changedPercentage) diffs as strings */
   def mkColoredTypeDiff(found: String, expected: String): (String, String, Double) = {
